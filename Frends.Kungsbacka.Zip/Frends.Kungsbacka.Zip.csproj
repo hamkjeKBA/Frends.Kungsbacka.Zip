@@ -2,14 +2,15 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net471</TargetFrameworks>
-    <authors>hamkje</authors>
+    <authors>Hampus Kjellstrand</authors>
     <copyright>hamkje</copyright>
-    <PackageLicenseExpression>UNLICENSED</PackageLicenseExpression>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/CommunityHiQ/Frends.Kungsbacka.Zip</PackageProjectUrl>
     <IncludeSource>true</IncludeSource>
-    <PackageTags>Frends</PackageTags>
+    <PackageTags>Frends;Kungsbacka;Zip</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Version>0.0.1</Version>
+    <Company>Kungsbacka Kommun</Company>
   </PropertyGroup>
 
   <ItemGroup>
