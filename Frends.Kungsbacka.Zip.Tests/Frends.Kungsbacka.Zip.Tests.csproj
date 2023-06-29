@@ -18,15 +18,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Frends.Kungsbacka.Zip\Frends.Kungsbacka.Zip.csproj" />
-    <Content Include="..\Libraries\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
   </ItemGroup>
-
-  <ItemGroup>
-    <None Update="Test7ZipFile\archive.7z">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
 </Project>

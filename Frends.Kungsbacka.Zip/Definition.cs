@@ -6,6 +6,33 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Frends.Kungsbacka.Zip.Definitions
 {
+    public class ZipFileOptions
+    {
+        public ZipFileOptions(int _setTimeoutForUnpackOperation = 5000)
+        {
+            SetTimeoutForUnpackOperation = _setTimeoutForUnpackOperation;
+        }
+
+        /// <summary>
+        /// Set timeout in milliseconds. 
+        /// If set below 1ms, defaults to 5sec (5000).
+        /// </summary>
+        private int _setTimeoutForUnpackOperation;
+        [DisplayFormat(DataFormatString = "Text")]
+        [DefaultValue(5000)]
+        public int SetTimeoutForUnpackOperation
+        {
+            get
+            {
+                return _setTimeoutForUnpackOperation <= 0 ? 5000 : _setTimeoutForUnpackOperation;
+            }
+            set
+            {
+                _setTimeoutForUnpackOperation = value;
+            }
+        }
+    }
+
     /// <summary>
     /// Input for tasks that unpack zip files. Specifies zip file path and unpack destinationfolder.
     /// </summary>
@@ -14,20 +41,25 @@ namespace Frends.Kungsbacka.Zip.Definitions
         /// <summary>
         /// Sets path to file to unpack.
         /// </summary>
-        [DisplayFormat(DataFormatString = "Text")]
+        [DisplayFormat(DataFormatString = "Expression")]
         [DefaultValue("@")]
         public string ZipFilePath { get; set; }
 
         /// <summary>
         /// Sets destination of unpacked files.
         /// </summary>
-        [DisplayFormat(DataFormatString = "Text")]
+        [DisplayFormat(DataFormatString = "Expression")]
         [DefaultValue("@")]
         public string DestinationFolderPath { get; set; }
     }
 
-    public class UnpackZipFileOptions
+    public class UnpackZipFileOptions : ZipFileOptions
     {
+        public UnpackZipFileOptions()
+        {
+            
+        }
+
         /// <summary>
         /// Choose if error should be thrown if Task failes.
         /// Otherwise, on error, returns false instead.
@@ -44,7 +76,13 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public bool Success;
     }
 
-
+    public class FindPathResult
+    {
+        /// <summary>
+        /// Contains the input repeated the specified number of times.
+        /// </summary>
+        public string exePath { get; set; } = "not found";
+    }
 
 
     public class ExtractFilesBySearchStringInput
@@ -65,7 +103,7 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public string TargetDirectory { get; set; }
     }
 
-    public class ExtractFilesBySearchStringOptions
+    public class ExtractFilesBySearchStringOptions : ZipFileOptions
     {
         /// <summary>
         /// Return only the first match found.
@@ -102,7 +140,7 @@ namespace Frends.Kungsbacka.Zip.Definitions
         /// <summary>
         /// Sets destination of unpacked files.
         /// </summary>
-        [DisplayFormat(DataFormatString = "Text")]
+        [DisplayFormat(DataFormatString = "Expression")]
         [DefaultValue("@")]
         public string FolderPath { get; set; }
     }

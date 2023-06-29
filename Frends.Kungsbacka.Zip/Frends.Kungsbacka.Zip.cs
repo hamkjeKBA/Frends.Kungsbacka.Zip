@@ -2,10 +2,10 @@
 using System.ComponentModel;
 using Frends.Kungsbacka.Zip.Definitions;
 using System.IO;
-using System.IO.Compression;
-using SevenZip;
 using System.Collections.Generic;
 using System.Linq;
+using System.Diagnostics;
+using System.IO.Compression;
 
 #pragma warning disable 1591
 
@@ -13,7 +13,7 @@ namespace Frends.Kungsbacka.Zip
 {
     public static class ZipTasks
     {
-        private static readonly string LIBRARY_FILE_PATH = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), @"7z.dll");
+        private static readonly string EXE_FILE_PATH = Path.Combine(@"C:\Program Files\7-Zip\", "7z.exe");
 
         /// <summary>
         /// Use this task to decompress/unpack .zip or .7z files.
@@ -46,11 +46,13 @@ namespace Frends.Kungsbacka.Zip
             {
                 try
                 {
-                    SevenZipBase.SetLibraryPath(LIBRARY_FILE_PATH);
-
-                    using (var extractor = new SevenZipExtractor(input.ZipFilePath))
+                    string arguments = $"x \"{input.ZipFilePath}\" -aoa -o\"{input.DestinationFolderPath}\" -y";
+                    ProcessStartInfo startInfo = new ProcessStartInfo(EXE_FILE_PATH, arguments);
+                    Process process = Process.Start(startInfo);
+                    bool wasProcessSucessful = process.WaitForExit(options.SetTimeoutForUnpackOperation); 
+                    if (!wasProcessSucessful)
                     {
-                        extractor.ExtractArchive(input.DestinationFolderPath);
+                        throw new TimeoutException($"TimeoutExeption: The process of unpacking {Path.GetFileName(input.ZipFilePath)} took too long.");
                     }
                 }
                 catch (Exception e)
@@ -79,56 +81,19 @@ namespace Frends.Kungsbacka.Zip
         {
             var matchingFiles = new List<string>();
             var archivePaths = FindAllZipArchivesInFolder(new FindAllZipArchivesInFolderInput { FolderPath = input.FolderPath}, new FindAllZipArchivesInFolderOptions()).Archives;
-            bool matchFound = false;
 
             foreach (var archivePath in archivePaths)
             {
                 if (Path.GetExtension(archivePath).ToLower() == ".7z")
                 {
-                    using (var extractor = new SevenZipExtractor(archivePath))
-                    {
-                        foreach (var entry in extractor.ArchiveFileData)
-                        {
-                            if (entry.FileName.Contains(input.SearchPattern))
-                            {
-                                matchingFiles.Add(entry.FileName);
-                                matchFound = true;
-
-                                if (options.DoNotExtractToTargetDirectory)
-                                    continue;
-
-                                string targetFilePath = Path.Combine(input.TargetDirectory, entry.FileName);
-                                extractor.ExtractFiles(input.TargetDirectory, entry.Index);
-                            }
-
-                            if (options.FirstMatchOnly && matchFound) break;
-                        }
-                    }
+                    matchingFiles.AddRange(SevenZipExtractAndCollectMatchingFiles(archivePath, input, options));
                 }
                 else if (Path.GetExtension(archivePath).ToLower() == ".zip")
                 {
-                    using (var archive = ZipFile.OpenRead(archivePath))
-                    {
-                        foreach (var entry in archive.Entries)
-                        {
-                            if (entry.FullName.Contains(input.SearchPattern))
-                            {
-                                matchingFiles.Add(entry.FullName);
-                                matchFound = true;
-
-                                if (options.DoNotExtractToTargetDirectory)
-                                    continue;
-
-                                string targetFilePath = Path.Combine(input.TargetDirectory, entry.FullName);
-                                entry.ExtractToFile(targetFilePath);
-                            }
-
-                            if (options.FirstMatchOnly && matchFound) break;
-                        }
-                    }
+                    matchingFiles.AddRange(ZipExtractAndCollectMatchingFiles(archivePath, input, options));
                 }
 
-                if (options.FirstMatchOnly && matchFound) break;
+                if (options.FirstMatchOnly && matchingFiles.Count > 0) break;
             }
 
             return new ExtractFilesBySearchStringResult { IsSuccessful = true, MatchingFiles = matchingFiles};
@@ -155,6 +120,97 @@ namespace Frends.Kungsbacka.Zip
             }
 
             return new FindAllZipArchivesInFolderResult { Archives = archiveFiles };
+        }
+
+        private static List<string> SevenZipExtractAndCollectMatchingFiles(
+            string archivePath, 
+            ExtractFilesBySearchStringInput input, 
+            ExtractFilesBySearchStringOptions options
+        )
+        {
+            var matchingFiles = new List<string>();
+
+            string command = $"l -slt \"{archivePath}\"";
+
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = EXE_FILE_PATH,
+                Arguments = command,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using (var process = Process.Start(processStartInfo))
+            {
+                bool stopLookingForMatches = false;
+             
+                while (!process.StandardOutput.EndOfStream && !stopLookingForMatches)
+                {
+                    string line = process.StandardOutput.ReadLine();
+
+                    if (!string.IsNullOrEmpty(line))
+                    {
+                        string entry = line.Trim();
+                        if (entry.Contains(input.SearchPattern) && entry.ToUpperInvariant().Contains("PATH ="))
+                        {
+                            matchingFiles.Add(entry);
+
+                            if (!options.DoNotExtractToTargetDirectory)
+                            {
+                                string extractCommand = $"e \"{archivePath}\" \"{entry}\" -o\"{input.TargetDirectory}\" -r";
+                                var extractProcessStartInfo = new ProcessStartInfo
+                                {
+                                    FileName = EXE_FILE_PATH,
+                                    Arguments = extractCommand,
+                                    CreateNoWindow = true,
+                                    RedirectStandardOutput = true,
+                                    RedirectStandardError = true,
+                                    UseShellExecute = false
+                                };
+
+                                using (var extractProcess = Process.Start(extractProcessStartInfo))
+                                {
+                                    extractProcess.WaitForExit(options.SetTimeoutForUnpackOperation);
+                                }
+                            }
+
+                            if (options.FirstMatchOnly) stopLookingForMatches = true;
+                        }
+                    }
+                }
+
+                process.WaitForExit(options.SetTimeoutForUnpackOperation);
+            }
+
+            return matchingFiles;
+        }
+
+        private static List<string> ZipExtractAndCollectMatchingFiles(string archivePath, ExtractFilesBySearchStringInput input, ExtractFilesBySearchStringOptions options)
+        {
+            var matchingFiles = new List<string>();
+
+            using (var archive = ZipFile.OpenRead(archivePath))
+            {
+                foreach (var entry in archive.Entries)
+                {
+                    if (entry.FullName.Contains(input.SearchPattern))
+                    {
+                        matchingFiles.Add(entry.FullName);
+
+                        if (!options.DoNotExtractToTargetDirectory)
+                        {
+                            string targetFilePath = Path.Combine(input.TargetDirectory, entry.FullName);
+                            entry.ExtractToFile(targetFilePath);
+                        }
+                    }
+
+                    if (options.FirstMatchOnly) break;
+                }
+            }
+
+            return matchingFiles;
         }
     }
 }

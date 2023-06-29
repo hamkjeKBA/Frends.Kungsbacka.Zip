@@ -9,7 +9,7 @@
     <IncludeSource>true</IncludeSource>
     <PackageTags>Frends;Kungsbacka;Zip</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>0.0.3</Version>
+    <Version>0.0.16</Version>
     <Company>Kungsbacka Kommun</Company>
   </PropertyGroup>
 
@@ -21,12 +21,8 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.1.23" />
     <PackageReference Include="System.ComponentModel.Annotations" Version="4.7.0" />
-    <Content Include="..\Libraries\**">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <PackageReference Include="Squid-Box.SevenZipSharp.Lite" Version="1.6.1.23" />
   </ItemGroup>
 
 </Project>
-

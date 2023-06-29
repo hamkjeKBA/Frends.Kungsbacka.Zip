@@ -2,6 +2,12 @@
 	"Tasks": [
 		{
 			"TaskMethod": "Frends.Kungsbacka.Zip.ZipTasks.UnpackZipFile"
+		},
+		{
+			"TaskMethod": "Frends.Kungsbacka.Zip.ZipTasks.ExtractFilesBySearchString"
+		},
+		{
+			"TaskMethod": "Frends.Kungsbacka.Zip.ZipTasks.FindAllZipArchivesInFolder"
 		}
 	]
 }

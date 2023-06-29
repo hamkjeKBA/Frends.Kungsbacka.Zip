@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using Frends.Kungsbacka.Zip.Definitions;
 using SevenZip;
+using System.Diagnostics;
 
 namespace Frends.Kungsbacka.Zip.Tests
 {
@@ -206,28 +207,33 @@ namespace Frends.Kungsbacka.Zip.Tests
 
     public class SevenZipTestsSetUpAndTearDown : BaseTestSetUpAndTearDown
     {
-        public readonly string LIBRARY_FILE_PATH = Path.Combine(Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location), @"7z.dll");
-        public SevenZipCompressor compressor = new SevenZipCompressor();
-
         [SetUp]
         public new void SetUp()
         {
-            SevenZipBase.SetLibraryPath(LIBRARY_FILE_PATH);
-            compressor.ArchiveFormat = OutArchiveFormat.SevenZip;
-            File.WriteAllText(Path.Combine(TEST_FOLDER_PATH, "file.txt"), "This is a sample file.");
-            File.WriteAllText(Path.Combine(TEST_FOLDER_PATH, "text.txt"), "This is another file.");
-            compressor.CompressFiles
-            (
-                Path.Combine(TEST_FOLDER_PATH, "Test7ZipFile.7z"),
-                new string[] 
-                {
-                    Path.Combine(TEST_FOLDER_PATH, "file.txt"),
-                    Path.Combine(TEST_FOLDER_PATH, "text.txt") 
-                }
-            );
+            string file1Path = Path.Combine(TEST_FOLDER_PATH, "file.txt");
+            string file2Path = Path.Combine(TEST_FOLDER_PATH, "text.txt");
+            string archivePath = Path.Combine(TEST_FOLDER_PATH, "Test7ZipFile.7z");
 
-            File.Delete(Path.Combine(TEST_FOLDER_PATH, "file.txt"));
-            File.Delete(Path.Combine(TEST_FOLDER_PATH, "text.txt"));
+            File.WriteAllText(file1Path, "This is a sample file.");
+            File.WriteAllText(file2Path, "This is another file.");
+
+            string command = $"a \"{archivePath}\" \"{file1Path}\" \"{file2Path}\"";
+
+            var processStartInfo = new ProcessStartInfo
+            {
+                FileName = @"C:\Program Files\7-Zip\7z.exe",
+                Arguments = command,
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+
+            using (var process = Process.Start(processStartInfo))
+            {
+                process.WaitForExit();
+            }
+
+            File.Delete(file1Path);
+            File.Delete(file2Path);
         }
     }
 
@@ -301,8 +307,8 @@ namespace Frends.Kungsbacka.Zip.Tests
             using (var archive = ZipFile.Open(Path.Combine(TEST_FOLDER_PATH, "ExtractFilesBySearchString_FirstMatchOnlyOption_ReturnsFirstMatchingFileOnly_ZIPArchive.zip"), ZipArchiveMode.Create))
             {
                 archive.CreateEntry("nomatch.txt");
-                archive.CreateEntry("file.txt");
-                archive.CreateEntry("file.txt");
+                archive.CreateEntry("file1.txt");
+                archive.CreateEntry("file2.txt");
             }
 
             var input = new ExtractFilesBySearchStringInput
@@ -323,6 +329,35 @@ namespace Frends.Kungsbacka.Zip.Tests
             Assert.IsTrue(result.IsSuccessful);
             Assert.IsNotNull(result.MatchingFiles);
             Assert.AreEqual(1, result.MatchingFiles.Count);
+        }
+
+        [Test]
+        public void ExtractFilesBySearchString_ReturnsAllMatchingFiles()
+        {
+            // Arrange
+            // Create a test zip archive
+            using (var archive = ZipFile.Open(Path.Combine(TEST_FOLDER_PATH, "zExtractFilesBySearchString_FirstMatchOnlyOption_ReturnsFirstMatchingFileOnly_ZIPArchive.zip"), ZipArchiveMode.Create))
+            {
+                archive.CreateEntry("nomatch.txt");
+                archive.CreateEntry("file1.txt");
+                archive.CreateEntry("file2.txt");
+            }
+
+            var input = new ExtractFilesBySearchStringInput
+            {
+                FolderPath = TEST_FOLDER_PATH,
+                SearchPattern = "file",
+                TargetDirectory = TEST_FOLDER_PATH
+            };
+            var options = new ExtractFilesBySearchStringOptions();
+
+            // Act
+            var result = ZipTasks.ExtractFilesBySearchString(input, options);
+
+            // Assert
+            Assert.IsTrue(result.IsSuccessful);
+            Assert.IsNotNull(result.MatchingFiles);
+            Assert.AreEqual(3, result.MatchingFiles.Count);
         }
     }
 }
