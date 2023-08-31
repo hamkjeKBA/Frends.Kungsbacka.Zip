@@ -6,33 +6,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Frends.Kungsbacka.Zip.Definitions
 {
-    public class ZipFileOptions
-    {
-        public ZipFileOptions(int _setTimeoutForUnpackOperation = 5000)
-        {
-            SetTimeoutForUnpackOperation = _setTimeoutForUnpackOperation;
-        }
-
-        /// <summary>
-        /// Set timeout in milliseconds. 
-        /// If set below 1ms, defaults to 5sec (5000).
-        /// </summary>
-        private int _setTimeoutForUnpackOperation;
-        [DisplayFormat(DataFormatString = "Text")]
-        [DefaultValue(5000)]
-        public int SetTimeoutForUnpackOperation
-        {
-            get
-            {
-                return _setTimeoutForUnpackOperation <= 0 ? 5000 : _setTimeoutForUnpackOperation;
-            }
-            set
-            {
-                _setTimeoutForUnpackOperation = value;
-            }
-        }
-    }
-
     /// <summary>
     /// Input for tasks that unpack zip files. Specifies zip file path and unpack destinationfolder.
     /// </summary>
@@ -53,11 +26,25 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public string DestinationFolderPath { get; set; }
     }
 
-    public class UnpackZipFileOptions : ZipFileOptions
+    public class UnpackZipFileOptions
     {
-        public UnpackZipFileOptions()
+        /// <summary>
+        /// Set timeout in milliseconds. 
+        /// If set below 1ms, defaults to 5sec (5000).
+        /// </summary>
+        private int _setTimeoutForUnpackOperation;
+        [DisplayFormat(DataFormatString = "Text")]
+        [DefaultValue(5000)]
+        public int SetTimeoutForUnpackOperation
         {
-            
+            get
+            {
+                return _setTimeoutForUnpackOperation <= 0 ? 5000 : _setTimeoutForUnpackOperation;
+            }
+            set
+            {
+                _setTimeoutForUnpackOperation = value;
+            }
         }
 
         /// <summary>
@@ -66,6 +53,13 @@ namespace Frends.Kungsbacka.Zip.Definitions
         /// </summary>
         [DefaultValue(true)]
         public bool ThrowErrorOnFailure { get; set; } = true;
+
+        /// <summary>
+        /// Choose if error should be thrown if file format is unsupported.
+        /// Otherwise, on unsupported, simply skips the file and logs it to the return value "SkippedFiles".
+        /// </summary>
+        [DefaultValue(true)]
+        public bool SkipFileOnUnsupported { get; set; } = true;
     }
 
     public class UnpackZipFileResult
@@ -73,17 +67,76 @@ namespace Frends.Kungsbacka.Zip.Definitions
         /// <summary>
         /// Contains the input repeated the specified number of times.
         /// </summary>
-        public bool Success;
-    }
+        public bool Success { get; set; }
 
-    public class FindPathResult
-    {
         /// <summary>
         /// Contains the input repeated the specified number of times.
         /// </summary>
-        public string exePath { get; set; } = "not found";
+        public string SkippedFile { get; set; }
     }
 
+    public class ExtractAllZipFilesInFolderInput
+    {
+        public ExtractAllZipFilesInFolderInput() { }
+
+        /// <summary>
+        /// Where to look for zip/7z-archives.
+        /// </summary>
+        [DisplayFormat(DataFormatString = "Expression")]
+        [DefaultValue("@")]
+        public string SourceFolderPath { get; set; }
+
+        /// <summary>
+        /// Sets destination of unpacked files.
+        /// </summary>
+        [DisplayFormat(DataFormatString = "Expression")]
+        [DefaultValue("@")]
+        public string DestinationFolderPath { get; set; }
+    }
+
+    public class ExtractAllZipFilesInFolderOptions
+    { 
+        /// <summary>
+        /// Set timeout in milliseconds. 
+        /// If set below 1ms, defaults to 5sec (5000).
+        /// </summary>
+        private int _setTimeoutForUnpackOperation;
+        [DisplayFormat(DataFormatString = "Text")]
+        [DefaultValue(5000)]
+        public int SetTimeoutForUnpackOperation
+        {
+            get
+            {
+                return _setTimeoutForUnpackOperation <= 0 ? 5000 : _setTimeoutForUnpackOperation;
+            }
+            set
+            {
+                _setTimeoutForUnpackOperation = value;
+            }
+        }
+
+        /// <summary>
+        /// Choose if error should be thrown if Task failes.
+        /// Otherwise, on error, returns false instead.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool ThrowErrorOnFailure { get; set; } = true;
+
+        /// <summary>
+        /// Choose if error should be thrown if file format is unsupported.
+        /// Otherwise, on unsupported, simply skips the file and logs it to the return value "SkippedFiles".
+        /// </summary>
+        [DefaultValue(true)]
+        public bool SkipFileOnUnsupported { get; set; } = true;
+    }
+
+    public class ExtractAllZipFilesInFolderResult
+    {
+        /// <summary>
+        /// A boolean flag indicating whether the extraction process was successful.
+        /// </summary>
+        public bool IsSuccessful { get; set; }
+    }
 
     public class ExtractFilesBySearchStringInput
     {
@@ -103,8 +156,27 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public string TargetDirectory { get; set; }
     }
 
-    public class ExtractFilesBySearchStringOptions : ZipFileOptions
+    public class ExtractFilesBySearchStringOptions
     {
+        /// <summary>
+        /// Set timeout in milliseconds. 
+        /// If set below 1ms, defaults to 5sec (5000).
+        /// </summary>
+        private int _setTimeoutForUnpackOperation;
+        [DisplayFormat(DataFormatString = "Text")]
+        [DefaultValue(5000)]
+        public int SetTimeoutForUnpackOperation
+        {
+            get
+            {
+                return _setTimeoutForUnpackOperation <= 0 ? 5000 : _setTimeoutForUnpackOperation;
+            }
+            set
+            {
+                _setTimeoutForUnpackOperation = value;
+            }
+        }
+
         /// <summary>
         /// Return only the first match found.
         /// </summary>
@@ -112,10 +184,22 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public bool FirstMatchOnly { get; set; } = false;
 
         /// <summary>
+        /// If the specified target path does not exist, then create it.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool CreateTargetFolderIfMissing { get; set; }
+
+        /// <summary>
         /// Use this option to skip the extraction step. Task will just return a list of found files.
         /// </summary>
         [DefaultValue(false)]
         public bool DoNotExtractToTargetDirectory { get; set; } = false;
+
+        /// <summary>
+        /// Use this option to overwrite files with same name. If false, will throw exception on if file allready exists.
+        /// </summary>
+        [DefaultValue(true)]
+        public bool OverwriteEnabled { get; set; } = true;
     }
 
     public class ExtractFilesBySearchStringResult
@@ -131,14 +215,10 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public List<string> MatchingFiles { get; set; }
     }
 
-
-
-
-
     public class FindAllZipArchivesInFolderInput
     {
         /// <summary>
-        /// Sets destination of unpacked files.
+        /// Where to look for zip/7z-archives.
         /// </summary>
         [DisplayFormat(DataFormatString = "Expression")]
         [DefaultValue("@")]

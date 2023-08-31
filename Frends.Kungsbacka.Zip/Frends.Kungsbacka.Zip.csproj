@@ -9,7 +9,7 @@
     <IncludeSource>true</IncludeSource>
     <PackageTags>Frends;Kungsbacka;Zip</PackageTags>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <Version>0.0.16</Version>
+    <Version>0.0.25</Version>
     <Company>Kungsbacka Kommun</Company>
   </PropertyGroup>
 

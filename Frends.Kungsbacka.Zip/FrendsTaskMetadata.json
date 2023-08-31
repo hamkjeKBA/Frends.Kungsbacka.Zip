@@ -8,6 +8,9 @@
 		},
 		{
 			"TaskMethod": "Frends.Kungsbacka.Zip.ZipTasks.FindAllZipArchivesInFolder"
+		},
+		{
+			"TaskMethod": "Frends.Kungsbacka.Zip.ZipTasks.ExtractAllZipArchives"
 		}
 	]
 }

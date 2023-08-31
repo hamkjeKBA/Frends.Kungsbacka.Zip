@@ -6,6 +6,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+using System.Threading;
 
 #pragma warning disable 1591
 
@@ -21,7 +24,8 @@ namespace Frends.Kungsbacka.Zip
         /// </summary>
         /// <param name="input">Mandatory parameters</param>
         /// <param name="options">Optional parameters</param>
-        /// <returns>bool</returns>
+        /// <returns>(bool) Result.Success</returns>
+        /// <returns>(List of strings) Result.SkippedFiles</returns>
         public static UnpackZipFileResult UnpackZipFile([PropertyTab] UnpackZipInput input, [PropertyTab] UnpackZipFileOptions options)
         {
             if (input is null) throw new ArgumentNullException(nameof(input));
@@ -30,6 +34,7 @@ namespace Frends.Kungsbacka.Zip
             Exception ex = null;
 
             string fileExtension = Path.GetExtension(input.ZipFilePath).ToLower();
+            string skippedFile = String.Empty;
 
             if (fileExtension == ".zip")
             {
@@ -62,12 +67,19 @@ namespace Frends.Kungsbacka.Zip
             }
             else
             {
-                ex = new ArgumentException("Unsupported file format.");
+                if(options.SkipFileOnUnsupported)
+                {
+                    skippedFile = Path.GetFileName(input.ZipFilePath);
+                }
+                else
+                {
+                    ex = new ArgumentException($"Unsupported file format: \"{Path.GetFileName(input.ZipFilePath)}\".");
+                }
             }
 
             if (options.ThrowErrorOnFailure && ex != null) throw ex;
 
-            return new UnpackZipFileResult { Success = ex == null };
+            return new UnpackZipFileResult { Success = ex == null, SkippedFile = skippedFile };
         }
 
         /// <summary>
@@ -80,6 +92,12 @@ namespace Frends.Kungsbacka.Zip
         public static ExtractFilesBySearchStringResult ExtractFilesBySearchString([PropertyTab] ExtractFilesBySearchStringInput input, [PropertyTab] ExtractFilesBySearchStringOptions options)
         {
             var matchingFiles = new List<string>();
+
+            if (!Directory.Exists(input.TargetDirectory) && options.CreateTargetFolderIfMissing)
+            {
+                Directory.CreateDirectory(input.TargetDirectory);
+            }
+            
             var archivePaths = FindAllZipArchivesInFolder(new FindAllZipArchivesInFolderInput { FolderPath = input.FolderPath}, new FindAllZipArchivesInFolderOptions()).Archives;
 
             foreach (var archivePath in archivePaths)
@@ -105,7 +123,7 @@ namespace Frends.Kungsbacka.Zip
         /// </summary>
         /// <param name="input">Mandatory parameters</param>
         /// <param name="options">Optional parameters</param>
-        /// <returns>bool</returns>
+        /// <returns>Result{ Archives }</returns>
         public static FindAllZipArchivesInFolderResult FindAllZipArchivesInFolder([PropertyTab] FindAllZipArchivesInFolderInput input, [PropertyTab] FindAllZipArchivesInFolderOptions options)
         {
             var archiveNames = new List<string>();
@@ -122,6 +140,68 @@ namespace Frends.Kungsbacka.Zip
             return new FindAllZipArchivesInFolderResult { Archives = archiveFiles };
         }
 
+        /// <summary>
+        /// Use this task to extract all archives within a source folder to a destination folder. (Extracts .zip and .7z archives)
+        /// Documentation: https://github.com/hamkjeKBA/Frends.Kungsbacka.Zip
+        /// </summary>
+        /// <param name="input">Mandatory parameters</param>
+        /// <param name="options">Optional parameters</param>
+        /// <returns>Result{ IsSuccessful = bool }</returns>
+        public static ExtractAllZipFilesInFolderResult ExtractAllZipArchives([PropertyTab] ExtractAllZipFilesInFolderInput input, [PropertyTab] ExtractAllZipFilesInFolderOptions options)
+        {
+            if (!Directory.Exists(input.SourceFolderPath))
+            {
+                throw new DirectoryNotFoundException("Source folder does not exist.");
+            }
+
+            if (!Directory.Exists(input.DestinationFolderPath))
+            {
+                throw new DirectoryNotFoundException("Destination folder does not exist.");
+            }
+
+            bool success = true; 
+
+            string arguments7z = $"x \"{Path.Combine(input.SourceFolderPath, "*.7z")}\" -o\"{input.DestinationFolderPath}\" -r";
+            var startInfo7z = new ProcessStartInfo(EXE_FILE_PATH, arguments7z)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+
+            string argumentsZip = $"x \"{Path.Combine(input.SourceFolderPath, "*.zip")}\"  -o\"{input.DestinationFolderPath}\" -r";
+            var startInfoZip = new ProcessStartInfo(EXE_FILE_PATH, argumentsZip)
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+
+            var processStartInfos = new List<ProcessStartInfo>() { startInfo7z, startInfoZip };
+
+            try
+            {
+                foreach (var startInfoToRun in processStartInfos)
+                {
+                    using (Process process = Process.Start(startInfoToRun))
+                    {
+                        process.WaitForExit(options.SetTimeoutForUnpackOperation);
+                    }   
+                }
+            }
+            catch (Exception e)
+            {
+                if (options.ThrowErrorOnFailure)
+                {
+                   throw e;
+                }
+                else
+                {
+                    success = false;
+                }
+            }
+            
+            return new ExtractAllZipFilesInFolderResult { IsSuccessful = success };
+        }
+
         private static List<string> SevenZipExtractAndCollectMatchingFiles(
             string archivePath, 
             ExtractFilesBySearchStringInput input, 
@@ -130,7 +210,7 @@ namespace Frends.Kungsbacka.Zip
         {
             var matchingFiles = new List<string>();
 
-            string command = $"l -slt \"{archivePath}\"";
+            string command = $"l -slt \"{archivePath}\" -y";
 
             var processStartInfo = new ProcessStartInfo
             {
@@ -159,7 +239,7 @@ namespace Frends.Kungsbacka.Zip
 
                             if (!options.DoNotExtractToTargetDirectory)
                             {
-                                string extractCommand = $"e \"{archivePath}\" \"{entry}\" -o\"{input.TargetDirectory}\" -r";
+                                string extractCommand = $"e \"{archivePath}\" \"{entry}\" -o\"{input.TargetDirectory}\" -r {(options.OverwriteEnabled ? "-y" : "")}";
                                 var extractProcessStartInfo = new ProcessStartInfo
                                 {
                                     FileName = EXE_FILE_PATH,
@@ -202,7 +282,7 @@ namespace Frends.Kungsbacka.Zip
                         if (!options.DoNotExtractToTargetDirectory)
                         {
                             string targetFilePath = Path.Combine(input.TargetDirectory, entry.FullName);
-                            entry.ExtractToFile(targetFilePath);
+                            entry.ExtractToFile(targetFilePath, options.OverwriteEnabled);
                         }
                     }
 

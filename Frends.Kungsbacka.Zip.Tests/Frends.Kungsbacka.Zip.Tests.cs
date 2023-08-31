@@ -3,8 +3,8 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using Frends.Kungsbacka.Zip.Definitions;
-using SevenZip;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace Frends.Kungsbacka.Zip.Tests
 {
@@ -73,7 +73,7 @@ namespace Frends.Kungsbacka.Zip.Tests
                 ZipFilePath = "TestFilePath.txt",
                 DestinationFolderPath = TEST_FOLDER_PATH
             };
-            var options = new UnpackZipFileOptions();
+            var options = new UnpackZipFileOptions() { SkipFileOnUnsupported = false };
 
             // Act
             Assert.Throws<ArgumentException>(() => ZipTasks.UnpackZipFile(input, options));
@@ -235,6 +235,38 @@ namespace Frends.Kungsbacka.Zip.Tests
             File.Delete(file1Path);
             File.Delete(file2Path);
         }
+
+        [TearDown]
+        public new void TearDown()
+        {
+            if (Directory.Exists(TEST_FOLDER_PATH))
+            {
+                string filePath = Path.Combine(TEST_FOLDER_PATH, "Test7ZipFile.7z");
+                int maxRetries = 5;
+                int retryDelayMilliseconds = 500;
+
+                bool fileDeleted = false;
+
+                while (!fileDeleted && 0 < maxRetries)
+                {
+                    try
+                    {
+                        File.Delete(filePath);
+                        fileDeleted = true;
+                    }
+                    catch (IOException)
+                    {
+                        Task.Delay(retryDelayMilliseconds).Wait();
+                        maxRetries--;
+                    }
+                }
+
+                if (!fileDeleted)
+                {
+                    throw new Exception("Deletion of test folder failed. Probably due to the 7zip console not having released the test archive yet.");
+                }
+            }
+        }
     }
 
     [TestFixture]
@@ -358,6 +390,55 @@ namespace Frends.Kungsbacka.Zip.Tests
             Assert.IsTrue(result.IsSuccessful);
             Assert.IsNotNull(result.MatchingFiles);
             Assert.AreEqual(3, result.MatchingFiles.Count);
+        }
+
+        [Test]
+        public void ExtractAllZipArchives_SuccessfulExtraction()
+        {
+            // Arrange
+            string sourceFolderPath = TEST_FOLDER_PATH;
+            string destinationFolderPath = TEST_FOLDER_PATH;
+            var input = new ExtractAllZipFilesInFolderInput { SourceFolderPath = sourceFolderPath, DestinationFolderPath = destinationFolderPath };
+            var options = new ExtractAllZipFilesInFolderOptions { SetTimeoutForUnpackOperation = 5000 };
+
+            // Act
+            var result = ZipTasks.ExtractAllZipArchives(input, options);
+
+            // Assert
+            Assert.True(Directory.Exists(destinationFolderPath));
+            Assert.True(result.IsSuccessful);
+        }
+
+        [Test]
+        public void ExtractAllZipArchives_SourceFolderDoesNotExist_ThrowDirectoryNotFoundException()
+        {
+            // Arrange
+            string sourceFolderPath = "Fel Folder";
+            string destinationFolderPath = TEST_FOLDER_PATH;
+            var input = new ExtractAllZipFilesInFolderInput { SourceFolderPath = sourceFolderPath, DestinationFolderPath = destinationFolderPath };
+            var options = new ExtractAllZipFilesInFolderOptions();
+
+            // Act 
+            var result = ZipTasks.ExtractAllZipArchives(input, options);
+
+            //Assert
+            Assert.AreEqual(true, result.IsSuccessful);
+        }
+
+        [Test]
+        public void ExtractAllZipArchives_DestinationFolderDoesNotExist_ThrowDirectoryNotFoundException()
+        {
+            // Arrange
+            string sourceFolderPath = TEST_FOLDER_PATH;
+            string destinationFolderPath = "Fel Folder";
+            var input = new ExtractAllZipFilesInFolderInput { SourceFolderPath = sourceFolderPath, DestinationFolderPath = destinationFolderPath };
+            var options = new ExtractAllZipFilesInFolderOptions();
+
+            // Act 
+            var result = ZipTasks.ExtractAllZipArchives(input, options);
+
+            //Assert
+            Assert.AreEqual(true, result.IsSuccessful);
         }
     }
 }
