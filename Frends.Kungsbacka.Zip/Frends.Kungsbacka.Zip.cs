@@ -1,14 +1,13 @@
-﻿using System;
-using System.ComponentModel;
-using Frends.Kungsbacka.Zip.Definitions;
-using System.IO;
+﻿using Frends.Kungsbacka.Zip.Definitions;
+using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.ComponentModel;
 using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
-using System.Net.Sockets;
-using System.Threading.Tasks;
-using System.Threading;
+using System.Linq;
+using System.Management.Automation;
+using System.Management.Automation.Runspaces;
 
 #pragma warning disable 1591
 
@@ -16,6 +15,7 @@ namespace Frends.Kungsbacka.Zip
 {
     public static class ZipTasks
     {
+        private static readonly string EXE_FILE_FOLDER_PATH = @"C:\Program Files\7-Zip\";
         private static readonly string EXE_FILE_PATH = Path.Combine(@"C:\Program Files\7-Zip\", "7z.exe");
 
         /// <summary>
@@ -54,7 +54,7 @@ namespace Frends.Kungsbacka.Zip
                     string arguments = $"x \"{input.ZipFilePath}\" -aoa -o\"{input.DestinationFolderPath}\" -y";
                     ProcessStartInfo startInfo = new ProcessStartInfo(EXE_FILE_PATH, arguments);
                     Process process = Process.Start(startInfo);
-                    bool wasProcessSucessful = process.WaitForExit(options.SetTimeoutForUnpackOperation); 
+                    bool wasProcessSucessful = process.WaitForExit(options.SetTimeoutForUnpackOperation);
                     if (!wasProcessSucessful)
                     {
                         throw new TimeoutException($"TimeoutExeption: The process of unpacking {Path.GetFileName(input.ZipFilePath)} took too long.");
@@ -67,7 +67,7 @@ namespace Frends.Kungsbacka.Zip
             }
             else
             {
-                if(options.SkipFileOnUnsupported)
+                if (options.SkipFileOnUnsupported)
                 {
                     skippedFile = Path.GetFileName(input.ZipFilePath);
                 }
@@ -97,24 +97,20 @@ namespace Frends.Kungsbacka.Zip
             {
                 Directory.CreateDirectory(input.TargetDirectory);
             }
-            
-            var archivePaths = FindAllZipArchivesInFolder(new FindAllZipArchivesInFolderInput { FolderPath = input.FolderPath}, new FindAllZipArchivesInFolderOptions()).Archives;
+
+            var archivePaths = FindAllZipArchivesInFolder(new FindAllZipArchivesInFolderInput { FolderPath = input.FolderPath }, new FindAllZipArchivesInFolderOptions()).Archives;
 
             foreach (var archivePath in archivePaths)
             {
-                if (Path.GetExtension(archivePath).ToLower() == ".7z")
+                if (Path.GetExtension(archivePath).ToLower() == ".7z" || Path.GetExtension(archivePath).ToLower() == ".zip")
                 {
                     matchingFiles.AddRange(SevenZipExtractAndCollectMatchingFiles(archivePath, input, options));
-                }
-                else if (Path.GetExtension(archivePath).ToLower() == ".zip")
-                {
-                    matchingFiles.AddRange(ZipExtractAndCollectMatchingFiles(archivePath, input, options));
                 }
 
                 if (options.FirstMatchOnly && matchingFiles.Count > 0) break;
             }
 
-            return new ExtractFilesBySearchStringResult { IsSuccessful = true, MatchingFiles = matchingFiles};
+            return new ExtractFilesBySearchStringResult { IsSuccessful = true, MatchingFiles = matchingFiles };
         }
 
         /// <summary>
@@ -159,7 +155,7 @@ namespace Frends.Kungsbacka.Zip
                 throw new DirectoryNotFoundException("Destination folder does not exist.");
             }
 
-            bool success = true; 
+            bool success = true;
 
             string arguments7z = $"x \"{Path.Combine(input.SourceFolderPath, "*.7z")}\" -o\"{input.DestinationFolderPath}\" -r";
             var startInfo7z = new ProcessStartInfo(EXE_FILE_PATH, arguments7z)
@@ -184,32 +180,31 @@ namespace Frends.Kungsbacka.Zip
                     using (Process process = Process.Start(startInfoToRun))
                     {
                         process.WaitForExit(options.SetTimeoutForUnpackOperation);
-                    }   
+                    }
                 }
             }
             catch (Exception e)
             {
                 if (options.ThrowErrorOnFailure)
                 {
-                   throw e;
+                    throw e;
                 }
                 else
                 {
                     success = false;
                 }
             }
-            
+
             return new ExtractAllZipFilesInFolderResult { IsSuccessful = success };
         }
 
         private static List<string> SevenZipExtractAndCollectMatchingFiles(
-            string archivePath, 
-            ExtractFilesBySearchStringInput input, 
+            string archivePath,
+            ExtractFilesBySearchStringInput input,
             ExtractFilesBySearchStringOptions options
         )
         {
             var matchingFiles = new List<string>();
-
             string command = $"l -slt \"{archivePath}\" -y";
 
             var processStartInfo = new ProcessStartInfo
@@ -224,8 +219,10 @@ namespace Frends.Kungsbacka.Zip
 
             using (var process = Process.Start(processStartInfo))
             {
+                Dictionary<WriteMode, string> writeModeLookup = new Dictionary<WriteMode, string> { { WriteMode.SKIP, "-aos -y" }, { WriteMode.RENAME, "-aou -y" }, { WriteMode.OVERWRITE, "-aoa -y" } };
+
                 bool stopLookingForMatches = false;
-             
+
                 while (!process.StandardOutput.EndOfStream && !stopLookingForMatches)
                 {
                     string line = process.StandardOutput.ReadLine();
@@ -235,24 +232,37 @@ namespace Frends.Kungsbacka.Zip
                         string entry = line.Trim();
                         if (entry.Contains(input.SearchPattern) && entry.ToUpperInvariant().Contains("PATH ="))
                         {
-                            matchingFiles.Add(entry);
-
+                            var trimmedEntry = entry.Substring(entry.LastIndexOf('=') + 1).Trim();
                             if (!options.DoNotExtractToTargetDirectory)
                             {
-                                string extractCommand = $"e \"{archivePath}\" \"{entry}\" -o\"{input.TargetDirectory}\" -r {(options.OverwriteEnabled ? "-y" : "")}";
-                                var extractProcessStartInfo = new ProcessStartInfo
-                                {
-                                    FileName = EXE_FILE_PATH,
-                                    Arguments = extractCommand,
-                                    CreateNoWindow = true,
-                                    RedirectStandardOutput = true,
-                                    RedirectStandardError = true,
-                                    UseShellExecute = false
-                                };
+                                ICollection<PSObject> results;
+                                string extractCommand = $"Invoke-Expression \".\\7z.exe e '{archivePath}' '{trimmedEntry}' -o'{input.TargetDirectory}' -r {writeModeLookup[options.WriteMode]}\"";
 
-                                using (var extractProcess = Process.Start(extractProcessStartInfo))
+#if NETSTANDARD2_0
+                                // Code specific to .NET Standard 2.0
+                                using (PowerShell ps = PowerShell.Create())
                                 {
-                                    extractProcess.WaitForExit(options.SetTimeoutForUnpackOperation);
+                                    ps.AddScript($"cd \"{EXE_FILE_FOLDER_PATH}\"");
+                                    ps.AddScript(extractCommand);
+                                    results = ps.Invoke();
+                                }
+#else
+                                // Code specific to .NET Framework 4.7.1
+                                using (Runspace runspace = RunspaceFactory.CreateRunspace())
+                                {
+                                    runspace.Open();
+
+                                    using (Pipeline pipeline = runspace.CreatePipeline())
+                                    {
+                                        pipeline.Commands.AddScript($"cd \"{EXE_FILE_FOLDER_PATH}\"");
+                                        pipeline.Commands.AddScript(extractCommand);
+                                        results = pipeline.Invoke();
+                                    }
+                                }
+#endif
+                                if (results.Any(r => r.ToString().Contains("Everything is Ok")))
+                                {
+                                    matchingFiles.Add(entry);
                                 }
                             }
 
@@ -262,32 +272,6 @@ namespace Frends.Kungsbacka.Zip
                 }
 
                 process.WaitForExit(options.SetTimeoutForUnpackOperation);
-            }
-
-            return matchingFiles;
-        }
-
-        private static List<string> ZipExtractAndCollectMatchingFiles(string archivePath, ExtractFilesBySearchStringInput input, ExtractFilesBySearchStringOptions options)
-        {
-            var matchingFiles = new List<string>();
-
-            using (var archive = ZipFile.OpenRead(archivePath))
-            {
-                foreach (var entry in archive.Entries)
-                {
-                    if (entry.FullName.Contains(input.SearchPattern))
-                    {
-                        matchingFiles.Add(entry.FullName);
-
-                        if (!options.DoNotExtractToTargetDirectory)
-                        {
-                            string targetFilePath = Path.Combine(input.TargetDirectory, entry.FullName);
-                            entry.ExtractToFile(targetFilePath, options.OverwriteEnabled);
-                        }
-                    }
-
-                    if (options.FirstMatchOnly) break;
-                }
             }
 
             return matchingFiles;

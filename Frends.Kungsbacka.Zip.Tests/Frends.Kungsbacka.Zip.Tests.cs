@@ -368,7 +368,7 @@ namespace Frends.Kungsbacka.Zip.Tests
         {
             // Arrange
             // Create a test zip archive
-            using (var archive = ZipFile.Open(Path.Combine(TEST_FOLDER_PATH, "zExtractFilesBySearchString_FirstMatchOnlyOption_ReturnsFirstMatchingFileOnly_ZIPArchive.zip"), ZipArchiveMode.Create))
+            using (var archive = ZipFile.Open(Path.Combine(TEST_FOLDER_PATH, "ExtractFilesBySearchString_FirstMatchOnlyOption_ReturnsFirstMatchingFileOnly_ZIPArchive.zip"), ZipArchiveMode.Create))
             {
                 archive.CreateEntry("nomatch.txt");
                 archive.CreateEntry("file1.txt");
@@ -430,15 +430,12 @@ namespace Frends.Kungsbacka.Zip.Tests
         {
             // Arrange
             string sourceFolderPath = TEST_FOLDER_PATH;
-            string destinationFolderPath = "Fel Folder";
+            string destinationFolderPath = @"C:\Path\To\Nonexistant\Directory\";
             var input = new ExtractAllZipFilesInFolderInput { SourceFolderPath = sourceFolderPath, DestinationFolderPath = destinationFolderPath };
             var options = new ExtractAllZipFilesInFolderOptions();
 
-            // Act 
-            var result = ZipTasks.ExtractAllZipArchives(input, options);
-
-            //Assert
-            Assert.AreEqual(true, result.IsSuccessful);
+            //Act & Assert
+            Assert.Throws< DirectoryNotFoundException>(() => ZipTasks.ExtractAllZipArchives(input, options));
         }
     }
 }

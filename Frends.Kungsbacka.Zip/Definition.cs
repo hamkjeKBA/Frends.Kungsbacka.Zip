@@ -6,6 +6,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Frends.Kungsbacka.Zip.Definitions
 {
+    public enum WriteMode { SKIP, RENAME, OVERWRITE }
+
     /// <summary>
     /// Input for tasks that unpack zip files. Specifies zip file path and unpack destinationfolder.
     /// </summary>
@@ -196,10 +198,9 @@ namespace Frends.Kungsbacka.Zip.Definitions
         public bool DoNotExtractToTargetDirectory { get; set; } = false;
 
         /// <summary>
-        /// Use this option to overwrite files with same name. If false, will throw exception on if file allready exists.
+        /// Specifies how to handle if filename allready exists.
         /// </summary>
-        [DefaultValue(true)]
-        public bool OverwriteEnabled { get; set; } = true;
+        public WriteMode WriteMode { get; set; }
     }
 
     public class ExtractFilesBySearchStringResult
